@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FaSearch } from "react-icons/fa";
 import Photo from "./Photo";
 // const clientID = `?client_id=${process.env.REACT_APP_ACCESS_KEY}`
@@ -11,52 +11,83 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
+  const mounted = useRef(false);
+  const [newImages, setNewImages] = useState(false);
   const fetchImages = async () => {
     setLoading(true);
     let url;
     const urlPage = `&page=${page}`;
-    url = `${mainUrl}${clientID}${urlPage}`;
+    const urlQuery = `&query=${query}`;
+    if (query) {
+      url = `${searchUrl}${clientID}${urlPage}${urlQuery}`;
+    } else {
+      url = `${mainUrl}${clientID}${urlPage}`;
+    }
     try {
       const response = await fetch(url);
       const data = await response.json();
       setPhotos((oldPhotos) => {
-        return [...oldPhotos, ...data];
+        if (query && page === 1) {
+          return data.results;
+        }
+        if (query) {
+          return [...oldPhotos, ...data.results]; /// this is to match the output of search function.
+        } else {
+          return [...oldPhotos, ...data];
+        }
       });
       setLoading(false);
+      setNewImages(false);
     } catch (error) {
       console.log(error);
       setLoading(false);
+      setNewImages(false);
     }
   };
   useEffect(() => {
     fetchImages();
+    //eslint-disable-next-line
   }, [page]);
 
   useEffect(() => {
-    const event = window.addEventListener("scroll", () => {
-      if (
-        !loading &&
-        window.innerHeight + window.scrollY >= document.body.scrollHeight - 2
-      ) {
-        setPage((page) => {
-          return page + 1;
-        });
-      }
-    });
-    return () => {
-      window.removeEventListener("scroll", event);
-    };
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (!newImages) return;
+    if (loading) return;
+    setPage((oldPage) => oldPage + 1);
+  }, [newImages]);
+
+  const event = () => {
+    if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) {
+      setNewImages(true);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("scroll", event);
+    return () => window.removeEventListener("scroll", event);
   }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setPage(1);
+    fetchImages();
   };
 
   return (
     <main>
       <section className="search">
         <form action="" className="search-form">
-          <input type="text" placeholder="search" className="form-input" />
+          <input
+            type="text"
+            placeholder="search"
+            className="form-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <button type="submit" className="submit-btn" onClick={handleSubmit}>
             <FaSearch />
           </button>
@@ -64,8 +95,8 @@ function App() {
       </section>
       <section className="photos">
         <div className="photos-center">
-          {photos.map((photo) => {
-            return <Photo key={photo.id} {...photo}></Photo>;
+          {photos.map((photo, index) => {
+            return <Photo key={index} {...photo}></Photo>;
           })}
         </div>
         {loading && <h2 className="loading">Loading...</h2>}
